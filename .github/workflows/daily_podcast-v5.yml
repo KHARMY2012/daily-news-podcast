@@ -1,0 +1,74 @@
+name: Daily Podcast Agent (V5 - Fixed OneDrive)
+
+on:
+  schedule:
+    # Twice Daily Cron Schedule (Times based on South Africa Standard Time SAST - UTC+2)
+    # Morning update at 07:30 SAST (05:30 AM UTC)
+    - cron: '30 5 * * *'
+    # Evening update at 18:00 SAST (04:00 PM UTC)
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+    # Allows you to manually trigger the podcast generation on GitHub at any time
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install openai gtts msal requests
+
+    - name: Run Podcast Generation Agent
+      env:
+        # Secure API Key stored in your GitHub Repository Secrets
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        
+        # User-specified topics of interest (comma-separated, no spaces around commas)
+        NEWS_TOPICS: "South African Economy,International Economy,Commodity prices Oil Gold Silver Platinum Palladium,South African Companies,Johannesburg Stock Exchange JSE,South African Property Industry,Shopping Centre Developments South Africa,Technology news,Arsenal Football Club"
+        
+        # Number of articles fetched per topic
+        MAX_ARTICLES: 4
+        
+        # Set to "openai" for realistic voices (requires API key) or "gtts" (free, basic voice)
+        TTS_PROVIDER: "openai"
+        
+        # Selected voice style (alloy, echo, fable, onyx, nova, shimmer)
+        OPENAI_TTS_VOICE: "alloy"
+      run: |
+        python news_agent-v2.py
+
+    - name: Upload Audio & Transcript to GitHub Run
+      uses: actions/upload-artifact@v4
+      with:
+        name: daily-podcast-briefing
+        path: |
+          *.mp3
+          *.txt
+        retention-days: 7
+
+    # Automatically sync to OneDrive using your own custom, robust Python script (no buggy third-party actions required!)
+    - name: Upload to OneDrive
+      env:
+        ONEDRIVE_CLIENT_ID: ${{ secrets.ONEDRIVE_CLIENT_ID }}
+        ONEDRIVE_TENANT_ID: ${{ secrets.ONEDRIVE_TENANT_ID }}
+        ONEDRIVE_CLIENT_SECRET: ${{ secrets.ONEDRIVE_CLIENT_SECRET }}
+        ONEDRIVE_USER_EMAIL: ${{ secrets.ONEDRIVE_USER_EMAIL }}
+        ONEDRIVE_DRIVE_ID: ${{ secrets.ONEDRIVE_DRIVE_ID }}
+        ONEDRIVE_FOLDER: "Daily Podcasts"
+      run: |
+        python upload_onedrive-v2.py
