@@ -39,7 +39,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         
         # User-specified topics of interest (comma-separated, no spaces around commas)
-        NEWS_TOPICS: "South African Economy,Global Economy,Technology,Artificial Intelligence,Interest Rate in South Africa,Property Sector,Commodity prices,Brent Crude Oil,Gold Price,Silver Price,South African Companies,Johannesburg Stock Exchange JSE,South African Property Industry,Shopping Centre Developments South Africa,Arsenal Football Club"
+        NEWS_TOPICS: "South African Economy,Global Economy,ZAR Exchange Rate,Technology,Artificial Intelligence,Interest Rate in South Africa,Property Sector,Commodity prices,Brent Crude Oil,Gold Price,Silver Price,South African Companies,Johannesburg Stock Exchange JSE,South African Property Industry,Shopping Centre Developments South Africa,Arsenal Football Club"
         
         # Number of articles fetched per topic
         MAX_ARTICLES: 6
