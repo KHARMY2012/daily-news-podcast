@@ -125,7 +125,7 @@ def fetch_google_news(topic):
 def generate_podcast_script(all_news_data):
     """
     Sends the gathered news to OpenAI to write a highly engaging, conversational
-    podcast script of 10-15 minutes (approx. 1,500 to 2,000 words).
+    podcast script of 10-15 minutes (approx. 2,500 to 3,500 words).
     """
     if not HAS_OPENAI:
         print("❌ Error: 'openai' Python package is not installed.", file=sys.stderr)
