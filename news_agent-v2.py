@@ -28,8 +28,37 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 DEFAULT_TOPICS = (
     "South African Economy,"
     "International Economy,"
-    "Commodity prices Oil Gold Silver Platinum Palladium,"
+    "ZAR exchange rate,"
+    "Commodity prices,"
+    "Oil price,"
+    "Gold price,"
+    "Silver price,"
+    "Platinum price,"
+    "Palladium price,"
+    "Interest rate in South Africa,"
+    "Interest rate in UK,"
+    "Interest rate in USA,"
+    "South African Economic Indicators,"
     "South African Companies,"
+    "Sasol,"
+    "MTN,"
+    "Oceana Group,"
+    "Metair,"
+    "Hulamin,"
+    "Thungela,"
+    "Telkom,"
+    "Prosus,"
+    "Exxaro,"
+    "Reunert,"
+    "Raubex,"
+    "WBHO,"
+    "Vodacom,"
+    "ArcelorMittal,"
+    "TFG,"
+    "Cashbuild,"
+    "African Rainbow Minerals,"
+    "Sea Harvest,"
+    "We Buy Cars,"
     "Johannesburg Stock Exchange JSE,"
     "South African Property Industry,"
     "Shopping Centre Developments,"
@@ -132,15 +161,15 @@ Here is today's raw news data:
 {news_text}
 
 Write a podcast script matching these exact guidelines:
-1. Tone: Professional, warm, intellectual, and highly engaging (similar to NPR's Planet Money or Bloomberg's daily briefing).
+1. Tone: Professional, energetic, intellectual, and highly engaging (similar to NPR's Planet Money or Bloomberg's daily briefing).
 2. Structure: 
    - Warm Introduction: "{greeting} briefing for {datetime.date.today().strftime('%A, %B %d, %Y')}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, property, and sport."
    - Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Do NOT just read a list of headlines. Group relevant articles, explain *why* these developments matter, connect the dots, and discuss their economic or real-world implications.
      Specifically ensure you cover:
-     * South African Economy (deep dive into recent economic figures, GDP trends, inflation, or government policy)
-     * International Economy (global macroeconomic context, central bank moves, US/EU market indicators)
+     * South African Economy (deep dive into recent economic figures, interest rates, economic indicators, GDP trends, inflation, or government policy)
+     * International Economy (global macroeconomic context, economic indicators, central bank moves, US/EU market indicators)
      * Commodity Prices (deeply discuss Oil, Gold, Silver, Platinum, and Palladium - how their movements impact mining, inflation, and currency markets)
-     * South African Companies (major corporate filings, earnings, executive moves)
+     * South African Companies (major corporate filings, earnings, Sasol, MTN, Oceana Group, Metair, Hulamin, Thungela, Telkom, Prosus, Exxaro, Reunert, Raubex, WBHO, Vodacom, ArcelorMittal, TFG, Cashbuild, African Rainbow Minerals, Sea Harvest, We Buy Cars, executive moves)
      * Johannesburg Stock Exchange (JSE) (market indices, key sectors leading or dragging, foreign investment flows)
      * South African Property Industry & Shopping Centre Developments (real estate trends, commercial vs residential, developments in malls, retail spaces)
      * Technology (global and local tech breakthroughs, AI, telecommunications)
