@@ -4,9 +4,9 @@ on:
   schedule:
     # Twice Daily Cron Schedule (Times based on South Africa Standard Time SAST - UTC+2)
     # Morning update at 07:30 SAST (05:30 AM UTC)
-    - cron: '30 5 * * *'
+    - cron: '30 2 * * *'
     # Evening update at 18:00 SAST (04:00 PM UTC)
-    - cron: '0 16 * * *'
+    - cron: '0 13 * * *'
   workflow_dispatch:
     # Allows you to manually trigger the podcast generation on GitHub at any time
 
