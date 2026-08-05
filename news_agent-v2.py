@@ -177,7 +177,7 @@ Write a podcast script matching these exact guidelines:
    - Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing seamlessly.
    - Outro: A thoughtful sign-off. If it's morning, wish them a productive day. If it's evening, wish them a relaxed evening. "That's your briefing for today. Thanks for joining me, and I'll see you in the next update."
 3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues (e.g. '[Intro Music]', '[Sound effect]'), speaker labels (e.g. 'Host:'), or markdown formatting (no bold asterisks, no bullet points, no hashtag headings). The output will be fed directly to a Text-to-Speech engine, so write it exactly as it should be spoken.
-4. Length: The script MUST be between 1,500 and 2,000 words. Develop each topic thoroughly to hit this length (aim for roughly 150 to 220 words per segment).
+4. Length: The script MUST be between 2,500 and 3,500 words. Develop each topic thoroughly to hit this length (aim for roughly 250 to 320 words per segment).
 """
 
     print("Generating long-form podcast script via OpenAI GPT-4o-mini...")
