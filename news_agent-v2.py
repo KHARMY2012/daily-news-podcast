@@ -154,31 +154,23 @@ def generate_podcast_script(all_news_data):
 
     # Construct the podcast prompt
     prompt = f"""
-You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings.
-Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
 
-Here is today's raw news data:
-{news_text}
+    You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. 
+    Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
 
-Write a podcast script matching these exact guidelines:
-1. Tone: Professional, energetic, intellectual, and highly engaging (similar to NPR's Planet Money or Bloomberg's daily briefing).
-2. Structure: 
-   - Warm Introduction: "{greeting} briefing for {datetime.date.today().strftime('%A, %B %d, %Y')}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, property, and sport."
-   - Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Do NOT just read a list of headlines. Group relevant articles, explain *why* these developments matter, connect the dots, and discuss their economic or real-world implications.
-     Specifically ensure you cover:
-     * South African Economy (deep dive into recent economic figures, interest rates, economic indicators, GDP trends, inflation, or government policy)
-     * International Economy (global macroeconomic context, economic indicators, central bank moves, US/EU market indicators)
-     * Commodity Prices (deeply discuss Oil, Gold, Silver, Platinum, and Palladium - how their movements impact mining, inflation, and currency markets)
-     * South African Companies (major corporate filings, earnings, Sasol, MTN, Oceana Group, Metair, Hulamin, Thungela, Telkom, Prosus, Exxaro, Reunert, Raubex, WBHO, Vodacom, ArcelorMittal, TFG, Cashbuild, African Rainbow Minerals, Sea Harvest, We Buy Cars, executive moves)
-     * Johannesburg Stock Exchange (JSE) (market indices, key sectors leading or dragging, foreign investment flows)
-     * South African Property Industry & Shopping Centre Developments (real estate trends, commercial vs residential, developments in malls, retail spaces)
-     * Technology (global and local tech breakthroughs, AI, telecommunications)
-     * Arsenal Football Club (latest matches, tactical breakdowns, transfer rumors, or upcoming match previews)
-   - Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing seamlessly.
-   - Outro: A thoughtful sign-off. If it's morning, wish them a productive day. If it's evening, wish them a relaxed evening. "That's your briefing for today. Thanks for joining me, and I'll see you in the next update."
-3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues (e.g. '[Intro Music]', '[Sound effect]'), speaker labels (e.g. 'Host:'), or markdown formatting (no bold asterisks, no bullet points, no hashtag headings). The output will be fed directly to a Text-to-Speech engine, so write it exactly as it should be spoken.
-4. Length: The script MUST be between 2,500 and 3,500 words. Develop each topic thoroughly to hit this length (aim for roughly 250 to 320 words per segment).
-"""
+    Here is today's raw news data:
+    {news_text}
+
+    Write a podcast script matching these exact guidelines:
+    1. Tone: Professional, energetic, intellectual, and highly engaging (similar to NPR's Planet Money or Bloomberg's daily briefing).
+    2. Structure:
+        * Warm Introduction: Give a charismatic greeting for today's date.
+        * Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Group relevant articles, explain why these developments matter, connect the dots, and discuss their economic or real-world implications.
+        * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing seamlessly.
+        * Outro: A thoughtful sign-off wishing the listener a productive day (if morning) or a relaxed evening (if evening).
+    3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues (e.g. '[Intro Music]'), speaker labels (e.g. 'Host:'), or markdown formatting (no bold asterisks, no bullet points, no hashtag headings). The output will be fed directly to a Text-to-Speech engine.
+    4. Length & Sparse News Policy: The script MUST be between 2,500 and 3,500 words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms for the listener, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length (aim for roughly 250 to 320 words per segment).
+    """
 
     print("Generating long-form podcast script via OpenAI GPT-4o-mini...")
     try:
@@ -186,17 +178,21 @@ Write a podcast script matching these exact guidelines:
             model="gpt-4o-mini",
             temperature=0.7,
             messages=[
-                {"role": "system", "content": "You are a professional, charismatic podcast narrator. You write text ready for speech synthesis with zero structural/markdown tags. You always deliver the exact word length requested."},
+                {
+                    "role": "system", 
+                    "content": "You are a professional, charismatic podcast narrator and financial journalist. You write text ready for speech synthesis with zero structural or markdown tags. When daily news is sparse, you masterfully expand the script with deeply detailed educational context, corporate histories, and economic explanations to ensure you always hit the exact word length requested."
+                },
                 {"role": "user", "content": prompt}
             ]
         )
-        script = response.choices[0].message.content.strip()
+        script = response.choices.message.content.strip()
         word_count = len(script.split())
         print(f"✓ Podcast script successfully generated! Word count: {word_count} words (~{(word_count/140):.1f} minutes of speech).")
         return script
     except Exception as e:
         print(f"❌ Error communicating with OpenAI API: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 # ==========================================
 # 3. TEXT SPLITTING (OpenAI TTS 4096-char Limit)
