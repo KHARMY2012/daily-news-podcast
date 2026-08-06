@@ -24,48 +24,23 @@ except ImportError:
 # ==========================================
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# Default to the user's specific topics of interest
+# We define the topics as a robust, single comma-separated string to avoid implicit tuple concatenation errors.
 DEFAULT_TOPICS = (
-    "South African Economy,"
-    "International Economy,"
-    "ZAR exchange rate,"
-    "Commodity prices,"
-    "Oil price,"
-    "Gold price,"
-    "Silver price,"
-    "Platinum price,"
-    "Palladium price,"
-    "Interest rate in South Africa,"
-    "Interest rate in UK,"
-    "Interest rate in USA,"
-    "South African Economic Indicators,"
-    "South African Companies,"
-    "Sasol,"
-    "MTN,"
-    "Oceana Group,"
-    "Metair,"
-    "Hulamin,"
-    "Thungela,"
-    "Telkom,"
-    "Prosus,"
-    "Exxaro,"
-    "Reunert,"
-    "Raubex,"
-    "WBHO,"
-    "Vodacom,"
-    "ArcelorMittal,"
-    "TFG,"
-    "Cashbuild,"
-    "African Rainbow Minerals,"
-    "Sea Harvest,"
-    "We Buy Cars,"
-    "Johannesburg Stock Exchange JSE,"
-    "South African Property Industry,"
-    "Shopping Centre Developments,"
-    "Technology,"
-    "Arsenal Football Club"
+    "South African Economy,International Economy,ZAR exchange rate,Commodity prices,Oil price,"
+    "Gold price,Silver price,Platinum price,Palladium price,Interest rate in South Africa,"
+    "Interest rate in UK,Interest rate in USA,South African Economic Indicators,South African Companies,"
+    "Sasol,MTN,Oceana Group,Metair,Hulamin,Thungela,Telkom,Prosus,Exxaro,Reunert,Raubex,WBHO,Vodacom,"
+    "ArcelorMittal,TFG,Cashbuild,African Rainbow Minerals,Sea Harvest,We Buy Cars,Johannesburg Stock Exchange JSE,"
+    "South African Property Industry,Shopping Centre Developments,Technology,Arsenal Football Club"
 )
-TOPICS = os.getenv("NEWS_TOPICS", DEFAULT_TOPICS).split(",")
+
+# Safely split topics into a list
+NEWS_TOPICS_ENV = os.getenv("NEWS_TOPICS", "")
+if NEWS_TOPICS_ENV:
+    TOPICS = [t.strip() for t in NEWS_TOPICS_ENV.split(",") if t.strip()]
+else:
+    TOPICS = [t.strip() for t in DEFAULT_TOPICS.split(",") if t.strip()]
+
 MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES", "4"))
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "openai").lower()  # "gtts" (free) or "openai" (paid)
 OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "alloy")  # alloy, echo, fable, onyx, nova, shimmer
@@ -82,41 +57,26 @@ def fetch_google_news(topic):
     encoded_topic = urllib.parse.quote(clean_topic)
     url = f"https://news.google.com/rss/search?q={encoded_topic}&hl=en-US&gl=US&ceid=US:en"
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
-    print(f"Retrieving news for topic: '{clean_topic}'...")
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
             xml_data = response.read()
             
         root = ET.fromstring(xml_data)
         articles = []
-        
-        # Parse RSS items
-        for item in root.findall(".//item")[:MAX_ARTICLES_PER_TOPIC]:
-            title = item.find("title").text if item.find("title") is not None else ""
-            link = item.find("link").text if item.find("link") is not None else ""
-            pub_date = item.find("pubDate").text if item.find("pubDate") is not None else ""
-            source = item.find("source").text if item.find("source") is not None else "Unknown Source"
+        for item in root.findall('.//item')[:MAX_ARTICLES_PER_TOPIC]:
+            title_elem = item.find('title')
+            link_elem = item.find('link')
+            pub_date_elem = item.find('pubDate')
             
-            # Clean up title (Google News titles usually end with " - Source Name")
-            if " - " in title:
-                title = title.rsplit(" - ", 1)[0]
-                
-            articles.append({
-                "title": title,
-                "link": link,
-                "date": pub_date,
-                "source": source
-            })
+            title = title_elem.text if title_elem is not None else "No Title"
+            link = link_elem.text if link_elem is not None else ""
+            pub_date = pub_date_elem.text if pub_date_elem is not None else ""
             
-        print(f"✓ Found {len(articles)} articles for '{clean_topic}'")
+            articles.append({"title": title, "link": link, "pubDate": pub_date})
         return articles
     except Exception as e:
-        print(f"❌ Error fetching news for topic '{clean_topic}': {e}", file=sys.stderr)
+        print(f"⚠️ Error fetching news for topic '{topic}': {e}", file=sys.stderr)
         return []
 
 # ==========================================
@@ -134,30 +94,22 @@ def generate_podcast_script(all_news_data):
     if not OPENAI_API_KEY:
         print("❌ Error: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
         sys.exit(1)
-        
+
+    # Initialize OpenAI Client
     client = OpenAI(api_key=OPENAI_API_KEY)
-    
-    # Format the gathered news into a readable text block for the LLM
+
+    # Format gathered news text for the prompt
     news_text = ""
     for topic, articles in all_news_data.items():
-        news_text += f"\n--- TOPIC: {topic} ---\n"
-        if not articles:
-            news_text += "No recent articles found.\n"
-            continue
-        for idx, art in enumerate(articles, 1):
-            news_text += f"{idx}. {art['title']} (Source: {art['source']}, Date: {art['date']})\n"
+        news_text += f"\n--- Topic: {topic} ---\n"
+        for i, art in enumerate(articles, 1):
+            news_text += f"{i}. {art['title']} ({art['pubDate']})\n"
 
-    # Determine whether this is a Morning or Evening update
-    current_hour = datetime.datetime.now().hour
-    time_of_day = "morning" if current_hour < 12 else "evening"
-    greeting = "Good morning and welcome to your" if time_of_day == "morning" else "Good evening and welcome to your end-of-day"
+    greeting = "morning" if datetime.datetime.now().hour < 12 else "evening"
+    today_str = datetime.date.today().strftime('%A, %B %d, %Y')
 
-    # Construct the podcast prompt
     prompt = f"""
-
-
-
-You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
+    You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
 
     Here is today's raw news data:
     {news_text}
@@ -165,7 +117,7 @@ You are an expert, professional podcast host and financial journalist, known for
     Write a podcast script matching these exact guidelines:
     1. Tone: Professional, energetic, intellectual, and highly engaging (similar to NPR's Planet Money or Bloomberg's daily briefing).
     2. Structure:
-        * Warm Introduction: Give a charismatic greeting for today's date.
+        * Warm Introduction: Give a charismatic greeting: "{greeting} briefing for {today_str}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, property, and sport."
         * Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Group relevant articles, explain why these developments matter, connect the dots, and discuss their economic or real-world implications.
         * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing seamlessly.
         * Outro: A thoughtful sign-off wishing the listener a productive day (if morning) or a relaxed evening (if evening).
@@ -186,8 +138,9 @@ You are an expert, professional podcast host and financial journalist, known for
                 {"role": "user", "content": prompt}
             ]
         )
+        
         # ==========================================
-        # THE CRITICAL FIX: Make sure  is included here!
+        # CRITICAL FIX: Properly indexed  here
         # ==========================================
         script = response.choices.message.content.strip()
         word_count = len(script.split())
@@ -196,13 +149,6 @@ You are an expert, professional podcast host and financial journalist, known for
     except Exception as e:
         print(f"❌ Error communicating with OpenAI API: {e}", file=sys.stderr)
         sys.exit(1)
-
-
-
-
-
-
-   
 
 # ==========================================
 # 3. TEXT SPLITTING (OpenAI TTS 4096-char Limit)
@@ -221,8 +167,7 @@ def split_script_into_chunks(text, max_chars=3800):
         para = para.strip()
         if not para:
             continue
-            
-        # If a single paragraph is somehow larger than max_chars, split it by sentences
+        # If a single paragraph is larger than max_chars, split it by sentences
         if len(para) > max_chars:
             sentences = para.replace(". ", ".\n").split("\n")
             for sentence in sentences:
@@ -249,7 +194,6 @@ def split_script_into_chunks(text, max_chars=3800):
                 
     if current_chunk:
         chunks.append("\n\n".join(current_chunk))
-        
     return chunks
 
 # ==========================================
@@ -262,32 +206,25 @@ def concatenate_mp3_files(file_list, output_path):
     import subprocess
     import tempfile
     
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as temp_file:
-        for file in file_list:
-            escaped_path = str(Path(file).resolve()).replace("'", "'\\''")
-            temp_file.write(f"file '{escaped_path}'\n")
-        list_file_path = temp_file.name
-
+    print("Stitching MP3 chunks together...")
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        for file_path in file_list:
+            escaped_path = file_path.replace("'", "'\\''")
+            f.write(f"file '{escaped_path}'\n")
+        list_filename = f.name
+        
     try:
         cmd = [
-            'ffmpeg', '-y', 
-            '-f', 'concat', 
-            '-safe', '0', 
-            '-i', list_file_path, 
-            '-c', 'copy', 
-            str(output_path)
+            'ffmpeg', '-y', '-f', 'concat', '-safe', '0', 
+            '-i', list_filename, '-c', 'copy', output_path
         ]
-        print(f"Stitching {len(file_list)} audio chunks into a seamless podcast...")
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        print("✓ Concatenation complete!")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ ffmpeg concatenation failed: {e.stderr.decode('utf-8')}", file=sys.stderr)
-        return False
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            raise Exception(f"FFmpeg failed: {result.stderr.decode()}")
     finally:
         try:
-            os.unlink(list_file_path)
-        except Exception:
+            os.unlink(list_filename)
+        except OSError:
             pass
 
 # ==========================================
@@ -301,60 +238,52 @@ def generate_audio(text, output_filename):
     output_path = Path(output_filename)
     chunks = split_script_into_chunks(text)
     
-    print(f"Script split into {len(chunks)} chunks for speech synthesis.")
-    temp_files = []
+    print(f"Generating audio in {len(chunks)} chunk(s) using {TTS_PROVIDER.upper()}...")
+    chunk_files = []
     
     try:
-        for idx, chunk in enumerate(chunks, 1):
-            temp_chunk_name = f"temp_chunk_{idx}.mp3"
-            temp_files.append(temp_chunk_name)
+        for idx, chunk in enumerate(chunks):
+            chunk_file = f"temp_chunk_{idx}.mp3"
+            chunk_files.append(chunk_file)
+            print(f"Processing chunk {idx+1}/{len(chunks)} ({len(chunk)} characters)...")
             
             if TTS_PROVIDER == "openai":
-                print(f"  → Synthesizing chunk {idx}/{len(chunks)} via OpenAI TTS ({OPENAI_TTS_VOICE})...")
-                if not HAS_OPENAI or not OPENAI_API_KEY:
-                    raise ValueError("OpenAI package or API Key missing. Falling back to gTTS.")
-                
+                if not HAS_OPENAI:
+                    print("❌ Error: 'openai' Python package is not installed.", file=sys.stderr)
+                    sys.exit(1)
                 client = OpenAI(api_key=OPENAI_API_KEY)
                 response = client.audio.speech.create(
                     model="tts-1",
                     voice=OPENAI_TTS_VOICE,
                     input=chunk
                 )
-                response.write_to_file(temp_chunk_name)
+                response.write_to_file(chunk_file)
             else:
-                print(f"  → Synthesizing chunk {idx}/{len(chunks)} via Google TTS (gTTS)...")
                 if not HAS_GTTS:
-                    raise ValueError("gTTS package is not installed.")
+                    print("❌ Error: 'gtts' Python package is not installed.", file=sys.stderr)
+                    sys.exit(1)
+                tts = gTTS(text=chunk, lang='en')
+                tts.save(chunk_file)
                 
-                tts = gTTS(text=chunk, lang="en", tld="com")
-                tts.save(temp_chunk_name)
-                
-        # Concatenate all generated chunk files
-        success = concatenate_mp3_files(temp_files, output_path)
-        if not success:
-            raise RuntimeError("Audio concatenation failed.")
+        # Concat files together
+        if len(chunk_files) == 1:
+            if output_path.exists():
+                output_path.unlink()
+            Path(chunk_files).rename(output_path)
+            print(f"✓ Audio generated successfully: {output_filename}")
+        else:
+            concatenate_mp3_files(chunk_files, str(output_path))
+            for cf in chunk_files:
+                if Path(cf).exists():
+                    Path(cf).unlink()
+            print(f"✓ Combined audio generated successfully: {output_filename}")
             
     except Exception as e:
-        print(f"❌ Voice synthesis failed or interrupted: {e}", file=sys.stderr)
-        print("Falling back to unified gTTS generation...", file=sys.stderr)
-        # Attempt to run a standard gTTS directly as a last-resort single file
-        try:
-            tts = gTTS(text=text, lang="en", tld="com")
-            tts.save(str(output_path))
-            print(f"✓ Fallback gTTS saved to: {output_path.resolve()}")
-        except Exception as fallback_err:
-            print(f"❌ Fallback gTTS also failed: {fallback_err}", file=sys.stderr)
-            sys.exit(1)
-            
-    finally:
-        # Clean up temporary chunk files
-        print("Cleaning up temporary chunk files...")
-        for temp_file in temp_files:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-            except Exception as e:
-                print(f"  ⚠ Failed to delete {temp_file}: {e}", file=sys.stderr)
+        print(f"❌ Error during audio generation: {e}", file=sys.stderr)
+        for cf in chunk_files:
+            if Path(cf).exists():
+                Path(cf).unlink()
+        sys.exit(1)
 
 # ==========================================
 # MAIN EXECUTION PIPELINE
@@ -364,39 +293,44 @@ def main():
     print("🚀 DAILY LONG-FORM PODCAST AGENT (V2): START")
     print("==========================================")
     
-    # Track gathered news
+    # Check API Key if using OpenAI
+    if TTS_PROVIDER == "openai":
+        if not OPENAI_API_KEY:
+            print("❌ Error: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
+            sys.exit(1)
+            
+    # Step 1: Fetch Google News
     all_news_data = {}
     for topic in TOPICS:
+        if not topic.strip():
+            continue
+        print(f"Retrieving news for topic: '{topic.strip()}'...")
         articles = fetch_google_news(topic)
-        all_news_data[topic] = articles
+        if articles:
+            print(f"✓ Found {len(articles)} articles for '{topic.strip()}'")
+            all_news_data[topic.strip()] = articles
+        else:
+            print(f"⚠️ No articles found for '{topic.strip()}'")
+            
+    if not all_news_data:
+        print("❌ Error: No news articles could be fetched for any topic. Exiting.", file=sys.stderr)
+        sys.exit(1)
         
-    # Check if we got any news at all
-    total_articles = sum(len(arts) for arts in all_news_data.values())
-    if total_articles == 0:
-        print("⚠ Warning: No news articles could be retrieved today. Exiting.")
-        sys.exit(0)
-        
-    # Synthesize the script
+    # Step 2: Generate Podcast Script
     script = generate_podcast_script(all_news_data)
     
-    # Save script transcript to a text file
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    current_hour = datetime.datetime.now().hour
-    period = "morning" if current_hour < 12 else "evening"
-    
-    transcript_filename = f"podcast_transcript_{today_str}_{period}.txt"
-    with open(transcript_filename, "w", encoding="utf-8") as f:
+    # Save transcript to file
+    transcript_path = Path("podcast_transcript.txt")
+    with open(transcript_path, "w", encoding="utf-8") as f:
         f.write(script)
-    print(f"✓ Written transcript saved to: {transcript_filename}")
+    print("✓ Podcast transcript saved to 'podcast_transcript.txt'")
     
-    # Generate MP3 Audio file
-    audio_filename = f"daily_briefing_{today_str}_{period}.mp3"
-    generate_audio(script, audio_filename)
+    # Step 3: Generate Audio
+    output_audio_file = "podcast_briefing.mp3"
+    generate_audio(script, output_audio_file)
     
-    print("\n==========================================")
-    print("🎉 EXECUTION COMPLETED SUCCESSFULLY!")
-    print(f"🎙 Audio: {audio_filename}")
-    print(f"📄 Text:  {transcript_filename}")
+    print("==========================================")
+    print("🎉 DAILY LONG-FORM PODCAST AGENT (V2): COMPLETE")
     print("==========================================")
 
 if __name__ == "__main__":
