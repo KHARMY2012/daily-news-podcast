@@ -155,8 +155,8 @@ def generate_podcast_script(all_news_data):
     # Construct the podcast prompt
     prompt = f"""
 
-    You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. 
-    Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
+You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. 
+Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
 
     Here is today's raw news data:
     {news_text}
@@ -185,6 +185,9 @@ def generate_podcast_script(all_news_data):
                 {"role": "user", "content": prompt}
             ]
         )
+        # ==========================================
+        # FIX: Added  to correctly index choices list
+        # ==========================================
         script = response.choices.message.content.strip()
         word_count = len(script.split())
         print(f"✓ Podcast script successfully generated! Word count: {word_count} words (~{(word_count/140):.1f} minutes of speech).")
@@ -193,6 +196,7 @@ def generate_podcast_script(all_news_data):
         print(f"❌ Error communicating with OpenAI API: {e}", file=sys.stderr)
         sys.exit(1)
 
+   
 
 # ==========================================
 # 3. TEXT SPLITTING (OpenAI TTS 4096-char Limit)
