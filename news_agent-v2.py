@@ -155,8 +155,7 @@ def generate_podcast_script(all_news_data):
     # Construct the podcast prompt
     prompt = f"""
 
-You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. 
-Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
+You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
 
     Here is today's raw news data:
     {news_text}
@@ -186,7 +185,7 @@ Your job is to synthesize the following raw news articles into a seamless, highl
             ]
         )
         # ==========================================
-        # FIX: Added  to correctly index choices list
+        # FIX: Correctly indexing the choices list
         # ==========================================
         script = response.choices.message.content.strip()
         word_count = len(script.split())
@@ -195,6 +194,11 @@ Your job is to synthesize the following raw news articles into a seamless, highl
     except Exception as e:
         print(f"❌ Error communicating with OpenAI API: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+
+
+
 
    
 
