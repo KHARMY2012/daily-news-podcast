@@ -155,6 +155,8 @@ def generate_podcast_script(all_news_data):
     # Construct the podcast prompt
     prompt = f"""
 
+
+
 You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
 
     Here is today's raw news data:
@@ -185,7 +187,7 @@ You are an expert, professional podcast host and financial journalist, known for
             ]
         )
         # ==========================================
-        # FIX: Correctly indexing the choices list
+        # THE CRITICAL FIX: Make sure  is included here!
         # ==========================================
         script = response.choices.message.content.strip()
         word_count = len(script.split())
