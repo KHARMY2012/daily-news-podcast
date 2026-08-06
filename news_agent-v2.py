@@ -50,8 +50,8 @@ OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "alloy")  # alloy, echo, fable,
 # ==========================================
 def fetch_google_news(topic):
     """
-    Fetches the latest articles for a topic using Google News RSS.
-    Requires no API keys or external dependencies.
+    Fetches the latest articles for a topic using Google News RSS [1].
+    Requires no API keys or external dependencies [1].
     """
     clean_topic = topic.strip()
     encoded_topic = urllib.parse.quote(clean_topic)
@@ -85,7 +85,7 @@ def fetch_google_news(topic):
 def generate_podcast_script(all_news_data):
     """
     Sends the gathered news to OpenAI to write a highly engaging, conversational
-    podcast script of 10-15 minutes (approx. 2,500 to 3,500 words).
+    podcast script of 10-15 minutes [2].
     """
     if not HAS_OPENAI:
         print("❌ Error: 'openai' Python package is not installed.", file=sys.stderr)
@@ -109,20 +109,20 @@ def generate_podcast_script(all_news_data):
     today_str = datetime.date.today().strftime('%A, %B %d, %Y')
 
     prompt = f"""
-    You are an expert, professional podcast host and financial journalist, known for delivering deep, engaging daily briefings. Your job is to synthesize the following raw news articles into a seamless, highly engaging, and conversational 10 to 15-minute podcast episode.
+    You are an expert, professional podcast host and financial journalist, known for delivering daily briefings [2]. Your job is to synthesize the news into a seamless, conversational 10 to 15-minute podcast episode [2].
 
     Here is today's raw news data:
     {news_text}
 
     Write a podcast script matching these exact guidelines:
-    1. Tone: Professional, energetic, intellectual, and highly engaging (similar to NPR's Planet Money or Bloomberg's daily briefing).
+    1. Tone: Professional, energetic, intellectual, and highly engaging [3].
     2. Structure:
         * Warm Introduction: Give a charismatic greeting: "{greeting} briefing for {today_str}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, property, and sport."
-        * Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Group relevant articles, explain why these developments matter, connect the dots, and discuss their economic or real-world implications.
-        * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing seamlessly.
-        * Outro: A thoughtful sign-off wishing the listener a productive day (if morning) or a relaxed evening (if evening).
-    3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues (e.g. '[Intro Music]'), speaker labels (e.g. 'Host:'), or markdown formatting (no bold asterisks, no bullet points, no hashtag headings). The output will be fed directly to a Text-to-Speech engine.
-    4. Length & Sparse News Policy: The script MUST be between 2,500 and 3,500 words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms for the listener, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length (aim for roughly 250 to 320 words per segment).
+        * Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Explain why these developments matter, connect the dots, and discuss their economic or real-world implications [3].
+        * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing [3].
+        * Outro: A thoughtful sign-off [3].
+    3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues, speaker labels, or markdown formatting [3].
+    4. Length & Sparse News Policy: The script MUST be between 2,500 and 3,500 words [3]. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length [3].
     """
 
     print("Generating long-form podcast script via OpenAI GPT-4o-mini...")
@@ -133,16 +133,16 @@ def generate_podcast_script(all_news_data):
             messages=[
                 {
                     "role": "system", 
-                    "content": "You are a professional, charismatic podcast narrator and financial journalist. You write text ready for speech synthesis with zero structural or markdown tags. When daily news is sparse, you masterfully expand the script with deeply detailed educational context, corporate histories, and economic explanations to ensure you always hit the exact word length requested."
+                    "content": "You are a professional, charismatic podcast narrator and financial journalist [3]. You write text ready for speech synthesis with zero structural or markdown tags [3]. When daily news is sparse, you masterfully expand the script with deeply detailed educational context, corporate histories, and economic explanations to ensure you always hit the exact word length requested [3]."
                 },
                 {"role": "user", "content": prompt}
             ]
         )
         
         # ==========================================
-        # CRITICAL FIX: Properly indexed  here
+        # CRITICAL FIX: Safe index reference
         # ==========================================
-        script = response.choices.message.content.strip()
+        script = response.choices[int(0)].message.content.strip()
         word_count = len(script.split())
         print(f"✓ Podcast script successfully generated! Word count: {word_count} words (~{(word_count/140):.1f} minutes of speech).")
         return script
@@ -155,8 +155,8 @@ def generate_podcast_script(all_news_data):
 # ==========================================
 def split_script_into_chunks(text, max_chars=3800):
     """
-    Splits a long script into smaller chunks, each below max_chars limit.
-    Preserves paragraph boundaries for natural phrasing.
+    Splits a long script into smaller chunks, each below max_chars limit [4].
+    Preserves paragraph boundaries for natural phrasing [4].
     """
     paragraphs = text.split("\n\n")
     chunks = []
@@ -201,7 +201,7 @@ def split_script_into_chunks(text, max_chars=3800):
 # ==========================================
 def concatenate_mp3_files(file_list, output_path):
     """
-    Stitches multiple MP3 chunk files into a single, seamless MP3 using ffmpeg.
+    Stitches multiple MP3 chunk files into a single, seamless MP3 using ffmpeg [5].
     """
     import subprocess
     import tempfile
@@ -232,8 +232,8 @@ def concatenate_mp3_files(file_list, output_path):
 # ==========================================
 def generate_audio(text, output_filename):
     """
-    Converts written script into an MP3 file using either gTTS or OpenAI TTS.
-    Automatically handles chunking and stitching to stay within API limits.
+    Converts written script into an MP3 file using either gTTS or OpenAI TTS [5].
+    Automatically handles chunking and stitching to stay within API limits [5].
     """
     output_path = Path(output_filename)
     chunks = split_script_into_chunks(text)
@@ -269,7 +269,10 @@ def generate_audio(text, output_filename):
         if len(chunk_files) == 1:
             if output_path.exists():
                 output_path.unlink()
-            Path(chunk_files).rename(output_path)
+            # ==========================================
+            # CRITICAL FIX: Safe index reference
+            # ==========================================
+            Path(chunk_files[int(0)]).rename(output_path)
             print(f"✓ Audio generated successfully: {output_filename}")
         else:
             concatenate_mp3_files(chunk_files, str(output_path))
@@ -299,7 +302,7 @@ def main():
             print("❌ Error: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
             sys.exit(1)
             
-    # Step 1: Fetch Google News
+    # Step 1: Fetch Google News [6]
     all_news_data = {}
     for topic in TOPICS:
         if not topic.strip():
