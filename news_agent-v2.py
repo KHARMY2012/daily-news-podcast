@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -48,8 +49,18 @@ MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES", "6"))
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "openai").lower()  # "gtts" (free) or "openai" (paid)
 OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "echo")  # alloy, echo, fable, onyx, nova, shimmer
 
+# Minimum acceptable script length before an expansion pass is triggered.
+MIN_SCRIPT_WORDS = int(os.getenv("MIN_SCRIPT_WORDS", "2200"))
+
+# Expansion asks for a little more than the minimum to reduce the chance
+# that the revised script still falls short.
+TARGET_SCRIPT_WORDS = int(os.getenv("TARGET_SCRIPT_WORDS", "2600"))
+
+# Prevent endless retries if the model repeatedly returns a short script.
+MAX_EXPANSION_PASSES = int(os.getenv("MAX_EXPANSION_PASSES", "2"))
+
 # ==========================================
-# 1. NEWS GATHERER (Google News RSS - Free)
+# 1. NEWS GATHERER (Google News RSS - Primary)
 # ==========================================
 def fetch_google_news(topic):
     """
@@ -181,6 +192,7 @@ def fetch_google_news(topic):
                         "link": link,
                         "pubDate": pub_date,
                         "source": source,
+                        "provider": "Google News",
                     }
                 )
 
@@ -223,18 +235,159 @@ def fetch_google_news(topic):
 
     return []
 
+
+# ==========================================
+# 1B. NEWS GATHERER (GDELT - Free Fallback)
+# ==========================================
+def fetch_gdelt_news(topic):
+    """
+    Fetch recent articles from the free GDELT DOC 2.0 API.
+
+    No API key is required. We try a tight recent window first and then
+    broaden it if necessary. This function is only used when Google News
+    returns no usable articles for a topic.
+    """
+    clean_topic = topic.strip()
+
+    # Try recent news first, then broaden the window.
+    timespans = ["3d", "7d"]
+
+    for timespan in timespans:
+        params = {
+            "query": clean_topic,
+            "mode": "ArtList",
+            "maxrecords": str(MAX_ARTICLES_PER_TOPIC),
+            "format": "json",
+            "sort": "HybridRel",
+            "timespan": timespan,
+        }
+
+        url = (
+            "https://api.gdeltproject.org/api/v2/doc/doc?"
+            + urllib.parse.urlencode(params)
+        )
+
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Daily-News-Podcast/2.0",
+                    "Accept": "application/json",
+                },
+            )
+
+            with urllib.request.urlopen(req, timeout=20) as response:
+                status = response.getcode()
+                content_type = response.headers.get("Content-Type", "")
+                raw_data = response.read()
+
+            print(
+                f"   GDELT response: "
+                f"HTTP {status} | "
+                f"{len(raw_data)} bytes | "
+                f"{content_type} | "
+                f"window={timespan}"
+            )
+
+            payload = json.loads(raw_data.decode("utf-8", errors="replace"))
+            items = payload.get("articles", [])
+
+            if not items:
+                print(
+                    f"   ⚠️ GDELT returned no articles "
+                    f"for '{clean_topic}' in the last {timespan}."
+                )
+                continue
+
+            articles = []
+
+            for item in items[:MAX_ARTICLES_PER_TOPIC]:
+                title = (item.get("title") or "No Title").strip()
+                link = (item.get("url") or "").strip()
+                pub_date = (item.get("seendate") or "").strip()
+                source = (
+                    item.get("domain")
+                    or item.get("source")
+                    or "GDELT"
+                )
+
+                articles.append(
+                    {
+                        "title": title,
+                        "link": link,
+                        "pubDate": pub_date,
+                        "source": source,
+                        "provider": "GDELT",
+                    }
+                )
+
+            if articles:
+                return articles
+
+        except urllib.error.HTTPError as e:
+            print(
+                f"⚠️ GDELT HTTP error for '{clean_topic}': "
+                f"{e.code} {e.reason}",
+                file=sys.stderr,
+            )
+
+        except urllib.error.URLError as e:
+            print(
+                f"⚠️ GDELT connection error for '{clean_topic}': "
+                f"{e.reason}",
+                file=sys.stderr,
+            )
+
+        except json.JSONDecodeError as e:
+            print(
+                f"⚠️ GDELT returned invalid JSON for '{clean_topic}': {e}",
+                file=sys.stderr,
+            )
+
+        except Exception as e:
+            print(
+                f"⚠️ Unexpected GDELT error for '{clean_topic}': {e}",
+                file=sys.stderr,
+            )
+
+    return []
+
+
+def fetch_news_with_fallback(topic):
+    """
+    Use Google News as the primary source and GDELT as a free backup.
+    """
+    articles = fetch_google_news(topic)
+
+    if articles:
+        return articles, "Google News"
+
+    print(
+        f"   ↪ Google News returned no usable articles for '{topic}'. "
+        f"Trying GDELT fallback..."
+    )
+
+    articles = fetch_gdelt_news(topic)
+
+    if articles:
+        return articles, "GDELT"
+
+    return [], "None"
+
+
 # ==========================================
 # 2. SYNTHESIZER (OpenAI gpt-4o-mini)
 # ==========================================
 def generate_podcast_script(all_news_data):
     """
     Sends the gathered news to OpenAI to write a highly engaging, conversational
-    podcast script of 10-15 minutes.
+    podcast script. If the first draft is too short, automatically asks OpenAI
+    to expand it before audio generation.
     """
     if not HAS_OPENAI:
         print("❌ Error: 'openai' Python package is not installed.", file=sys.stderr)
         sys.exit(1)
-        
+
     if not OPENAI_API_KEY:
         print("❌ Error: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
         sys.exit(1)
@@ -247,13 +400,24 @@ def generate_podcast_script(all_news_data):
     for topic, articles in all_news_data.items():
         news_text += f"\n--- Topic: {topic} ---\n"
         for i, art in enumerate(articles, 1):
-            news_text += f"{i}. {art['title']} ({art['pubDate']})\n"
+            source = art.get("source", "")
+            provider = art.get("provider", "")
+            source_text = " | ".join(
+                part for part in [source, provider] if part
+            )
+            if source_text:
+                source_text = f" | Source: {source_text}"
+            news_text += (
+                f"{i}. {art['title']} "
+                f"({art['pubDate']})"
+                f"{source_text}\n"
+            )
 
     greeting = "morning" if datetime.datetime.now().hour < 12 else "evening"
     today_str = datetime.date.today().strftime('%A, %B %d, %Y')
 
     prompt = f"""
-    You are an expert, professional podcast host and financial journalist, known for delivering daily briefings. Your job is to synthesize the news into a seamless, conversational 10 to 15-minute podcast episode.
+    You are an expert, professional podcast host and financial journalist, known for delivering daily briefings. Your job is to synthesize the news into a seamless, conversational 15 to 20-minute podcast episode.
 
     Here is today's raw news data:
     {news_text}
@@ -266,31 +430,134 @@ def generate_podcast_script(all_news_data):
         * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing.
         * Outro: Todays commodaties prices are Gold is trading at ..., silver at..., platinum at ..., palladium at ... and brent crude oil at .... The Rand is currently at ... to the US Dollar, ... to the GB Pound, ... to the Euro and ... to the Saudi Riyaal.
     3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues, speaker labels, or markdown formatting.
-    4. Length & Sparse News Policy: The script MUST be between 2,500 and 4,500 words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length.
+    4. Length & Sparse News Policy: Aim for roughly {TARGET_SCRIPT_WORDS:,} words and do not return fewer than {MIN_SCRIPT_WORDS:,} words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, elaborate on relevant historical background, explain business models, define JSE or economic terms, and discuss wider industry trends.
+    5. Accuracy: Do not invent current prices, breaking-news claims, dates, company results, quotes, or other specific current facts that are not present in the supplied news data. Educational background and general explanatory context may be added where useful.
     """
 
+    system_prompt = (
+        "You are a professional, charismatic podcast narrator and financial journalist. "
+        "You write text ready for speech synthesis with zero structural or markdown tags. "
+        "When daily news is sparse, expand with educational context, corporate histories, "
+        "business-model explanations and economic concepts without inventing current facts."
+    )
+
     print("Generating long-form podcast script via OpenAI GPT-4o-mini...")
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0.7,
             messages=[
                 {
-                    "role": "system", 
-                    "content": "You are a professional, charismatic podcast narrator and financial journalist. You write text ready for speech synthesis with zero structural or markdown tags. When daily news is sparse, you masterfully expand the script with deeply detailed educational context, corporate histories, and economic explanations to ensure you always hit the exact word length requested."
+                    "role": "system",
+                    "content": system_prompt,
                 },
-                {"role": "user", "content": prompt}
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
             ]
         )
-        
-        # Safe choice index parsing (bypasses system footnote stripping)
+
         script = response.choices[int(0)].message.content.strip()
         word_count = len(script.split())
-        print(f"✓ Podcast script successfully generated! Word count: {word_count} words (~{(word_count/140):.1f} minutes of speech).")
+
+        print(
+            f"✓ Initial podcast draft generated. "
+            f"Word count: {word_count} words "
+            f"(~{(word_count/140):.1f} minutes of speech)."
+        )
+
+        # Automatically expand a short draft before sending it to TTS.
+        expansion_pass = 0
+
+        while (
+            word_count < MIN_SCRIPT_WORDS
+            and expansion_pass < MAX_EXPANSION_PASSES
+        ):
+            expansion_pass += 1
+
+            print(
+                f"⚠️ Draft is below the {MIN_SCRIPT_WORDS}-word minimum. "
+                f"Running expansion pass {expansion_pass}/{MAX_EXPANSION_PASSES}..."
+            )
+
+            expansion_prompt = f"""
+            Expand and rewrite the podcast script below into one complete, polished spoken-word script.
+
+            Current word count: {word_count}
+            Required minimum: {MIN_SCRIPT_WORDS}
+            Target length: approximately {TARGET_SCRIPT_WORDS} words
+
+            Requirements:
+            - Return the COMPLETE revised podcast script, not just additional paragraphs.
+            - Preserve all important news points already in the script.
+            - Add useful explanation, context, transitions, business-model background, economic definitions and implications.
+            - Do not pad with repetitive filler.
+            - Do not invent new current prices, dates, company results, quotes or breaking-news facts.
+            - Keep the same professional, energetic financial-news style.
+            - Output only the spoken words with no markdown, headings or notes.
+
+            CURRENT SCRIPT:
+            {script}
+            """
+
+            expanded_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                temperature=0.65,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": expansion_prompt,
+                    }
+                ]
+            )
+
+            expanded_script = (
+                expanded_response.choices[int(0)].message.content.strip()
+            )
+            expanded_word_count = len(expanded_script.split())
+
+            # Only replace the previous draft if the model actually made it longer.
+            if expanded_word_count > word_count:
+                script = expanded_script
+                word_count = expanded_word_count
+                print(
+                    f"✓ Expansion pass {expansion_pass} complete. "
+                    f"New word count: {word_count} words "
+                    f"(~{(word_count/140):.1f} minutes)."
+                )
+            else:
+                print(
+                    f"⚠️ Expansion pass {expansion_pass} did not increase "
+                    f"the script length ({expanded_word_count} words)."
+                )
+                break
+
+        if word_count < MIN_SCRIPT_WORDS:
+            print(
+                f"⚠️ Final script is still below the preferred "
+                f"{MIN_SCRIPT_WORDS}-word minimum ({word_count} words), "
+                f"but audio generation will continue.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"✓ Final script passed minimum-length check: "
+                f"{word_count} words "
+                f"(~{(word_count/140):.1f} minutes of speech)."
+            )
+
         return script
+
     except Exception as e:
         print(f"❌ Error communicating with OpenAI API: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 # ==========================================
 # 3. TEXT SPLITTING (OpenAI TTS 4096-char Limit)
@@ -304,7 +571,7 @@ def split_script_into_chunks(text, max_chars=3800):
     chunks = []
     current_chunk = []
     current_length = 0
-    
+
     for para in paragraphs:
         para = para.strip()
         if not para:
@@ -333,10 +600,11 @@ def split_script_into_chunks(text, max_chars=3800):
             else:
                 current_chunk.append(para)
                 current_length += len(para) + 2
-                
+
     if current_chunk:
         chunks.append("\n\n".join(current_chunk))
     return chunks
+
 
 # ==========================================
 # 4. AUDIO CONCATENATOR (ffmpeg)
@@ -347,7 +615,7 @@ def concatenate_mp3_files(file_list, output_path):
     """
     import subprocess
     import tempfile
-    
+
     print("Stitching MP3 chunks together...")
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
         for file_path in file_list:
@@ -358,10 +626,10 @@ def concatenate_mp3_files(file_list, output_path):
             escaped_path = abs_path.replace("'", "'\\''")
             f.write(f"file '{escaped_path}'\n")
         list_filename = f.name
-        
+
     try:
         cmd = [
-            'ffmpeg', '-y', '-f', 'concat', '-safe', '0', 
+            'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
             '-i', list_filename, '-c', 'copy', str(output_path)
         ]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -373,6 +641,7 @@ def concatenate_mp3_files(file_list, output_path):
         except OSError:
             pass
 
+
 # ==========================================
 # 5. VOICE ARTIST (TTS Generation in Chunks)
 # ==========================================
@@ -383,10 +652,10 @@ def generate_audio(text, output_filename):
     """
     output_path = Path(output_filename)
     chunks = split_script_into_chunks(text)
-    
+
     print(f"Generating audio in {len(chunks)} chunk(s) using {TTS_PROVIDER.upper()}...")
     chunk_files = []
-    
+
     try:
         for idx, chunk in enumerate(chunks):
             # ==========================================
@@ -395,7 +664,7 @@ def generate_audio(text, output_filename):
             chunk_file = os.path.abspath(f"temp_chunk_{idx}.mp3")
             chunk_files.append(chunk_file)
             print(f"Processing chunk {idx+1}/{len(chunks)} ({len(chunk)} characters)...")
-            
+
             if TTS_PROVIDER == "openai":
                 if not HAS_OPENAI:
                     print("❌ Error: 'openai' Python package is not installed.", file=sys.stderr)
@@ -413,7 +682,7 @@ def generate_audio(text, output_filename):
                     sys.exit(1)
                 tts = gTTS(text=chunk, lang='en')
                 tts.save(chunk_file)
-                
+
         # Concat files together
         if len(chunk_files) == 1:
             if output_path.exists():
@@ -426,13 +695,14 @@ def generate_audio(text, output_filename):
                 if Path(cf).exists():
                     Path(cf).unlink()
             print(f"✓ Combined audio generated successfully: {output_filename}")
-            
+
     except Exception as e:
         print(f"❌ Error during audio generation: {e}", file=sys.stderr)
         for cf in chunk_files:
             if Path(cf).exists():
                 Path(cf).unlink()
         sys.exit(1)
+
 
 # ==========================================
 # MAIN EXECUTION PIPELINE
@@ -441,46 +711,62 @@ def main():
     print("==========================================")
     print("🚀 DAILY LONG-FORM PODCAST AGENT (V2): START")
     print("==========================================")
-    
+
     # Check API Key if using OpenAI
     if TTS_PROVIDER == "openai":
         if not OPENAI_API_KEY:
             print("❌ Error: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
             sys.exit(1)
-            
-    # Step 1: Fetch Google News
+
+    # Step 1: Fetch news (Google News primary, GDELT fallback)
     all_news_data = {}
+
     for topic in TOPICS:
         if not topic.strip():
             continue
-        print(f"Retrieving news for topic: '{topic.strip()}'...")
-        articles = fetch_google_news(topic)
+
+        clean_topic = topic.strip()
+        print(f"Retrieving news for topic: '{clean_topic}'...")
+
+        articles, provider = fetch_news_with_fallback(clean_topic)
+
         if articles:
-            print(f"✓ Found {len(articles)} articles for '{topic.strip()}'")
-            all_news_data[topic.strip()] = articles
+            print(
+                f"✓ Found {len(articles)} articles for "
+                f"'{clean_topic}' via {provider}"
+            )
+            all_news_data[clean_topic] = articles
         else:
-            print(f"⚠️ No articles found for '{topic.strip()}'")
-            
+            print(
+                f"⚠️ No articles found for '{clean_topic}' "
+                f"from Google News or GDELT"
+            )
+
     if not all_news_data:
-        print("❌ Error: No news articles could be fetched for any topic. Exiting.", file=sys.stderr)
+        print(
+            "❌ Error: No news articles could be fetched from "
+            "Google News or GDELT for any topic. Exiting.",
+            file=sys.stderr,
+        )
         sys.exit(1)
-        
+
     # Step 2: Generate Podcast Script
     script = generate_podcast_script(all_news_data)
-    
+
     # Save transcript to file
     transcript_path = Path("podcast_transcript.txt")
     with open(transcript_path, "w", encoding="utf-8") as f:
         f.write(script)
     print("✓ Podcast transcript saved to 'podcast_transcript.txt'")
-    
+
     # Step 3: Generate Audio
     output_audio_file = "podcast_briefing.mp3"
     generate_audio(script, output_audio_file)
-    
+
     print("==========================================")
     print("🎉 DAILY LONG-FORM PODCAST AGENT (V2): COMPLETE")
     print("==========================================")
+
 
 if __name__ == "__main__":
     main()
