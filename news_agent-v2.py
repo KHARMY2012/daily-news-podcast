@@ -51,34 +51,175 @@ OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "echo")  # alloy, echo, fable, 
 # ==========================================
 def fetch_google_news(topic):
     """
-    Fetches the latest articles for a topic using Google News RSS.
-    Requires no API keys or external dependencies.
+    Fetch latest articles from Google News RSS.
+    Includes South African localisation, retries and better diagnostics.
     """
     clean_topic = topic.strip()
-    encoded_topic = urllib.parse.quote(clean_topic)
-    url = f"https://news.google.com/rss/search?q={encoded_topic}&hl=en-US&gl=US&ceid=US:en"
-    
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            xml_data = response.read()
-            
-        root = ET.fromstring(xml_data)
-        articles = []
-        for item in root.findall('.//item')[:MAX_ARTICLES_PER_TOPIC]:
-            title_elem = item.find('title')
-            link_elem = item.find('link')
-            pub_date_elem = item.find('pubDate')
-            
-            title = title_elem.text if title_elem is not None else "No Title"
-            link = link_elem.text if link_elem is not None else ""
-            pub_date = pub_date_elem.text if pub_date_elem is not None else ""
-            
-            articles.append({"title": title, "link": link, "pubDate": pub_date})
-        return articles
-    except Exception as e:
-        print(f"⚠️ Error fetching news for topic '{topic}': {e}", file=sys.stderr)
-        return []
+
+    # Try South Africa first, then US/global as fallback
+    regions = [
+        ("en-ZA", "ZA", "ZA:en"),
+        ("en-US", "US", "US:en"),
+    ]
+
+    for hl, gl, ceid in regions:
+
+        params = {
+            "q": clean_topic,
+            "hl": hl,
+            "gl": gl,
+            "ceid": ceid,
+        }
+
+        url = (
+            "https://news.google.com/rss/search?"
+            + urllib.parse.urlencode(params)
+        )
+
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/126.0 Safari/537.36"
+                    ),
+                    "Accept": (
+                        "application/rss+xml,"
+                        "application/xml;q=0.9,"
+                        "text/xml;q=0.8,"
+                        "*/*;q=0.7"
+                    ),
+                    "Accept-Language": "en-ZA,en;q=0.9",
+                },
+            )
+
+            with urllib.request.urlopen(req, timeout=20) as response:
+
+                status = response.getcode()
+                content_type = response.headers.get(
+                    "Content-Type",
+                    ""
+                )
+
+                xml_data = response.read()
+
+            print(
+                f"   Google News response: "
+                f"HTTP {status} | "
+                f"{len(xml_data)} bytes | "
+                f"{content_type}"
+            )
+
+            root = ET.fromstring(xml_data)
+
+            # More robust than root.findall('.//item')
+            items = list(root.iter("item"))
+
+            if not items:
+                print(
+                    f"   ⚠️ Google returned no RSS items "
+                    f"using region {gl}."
+                )
+
+                # Useful debugging output
+                preview = xml_data[:300].decode(
+                    "utf-8",
+                    errors="replace"
+                )
+
+                print(
+                    f"   Response preview: "
+                    f"{preview[:300]}"
+                )
+
+                continue
+
+            articles = []
+
+            for item in items[:MAX_ARTICLES_PER_TOPIC]:
+
+                title_elem = item.find("title")
+                link_elem = item.find("link")
+                pub_date_elem = item.find("pubDate")
+                source_elem = item.find("source")
+
+                title = (
+                    title_elem.text.strip()
+                    if title_elem is not None
+                    and title_elem.text
+                    else "No Title"
+                )
+
+                link = (
+                    link_elem.text.strip()
+                    if link_elem is not None
+                    and link_elem.text
+                    else ""
+                )
+
+                pub_date = (
+                    pub_date_elem.text.strip()
+                    if pub_date_elem is not None
+                    and pub_date_elem.text
+                    else ""
+                )
+
+                source = (
+                    source_elem.text.strip()
+                    if source_elem is not None
+                    and source_elem.text
+                    else ""
+                )
+
+                articles.append(
+                    {
+                        "title": title,
+                        "link": link,
+                        "pubDate": pub_date,
+                        "source": source,
+                    }
+                )
+
+            if articles:
+                return articles
+
+        except urllib.error.HTTPError as e:
+
+            print(
+                f"⚠️ Google News HTTP error "
+                f"for '{clean_topic}': "
+                f"{e.code} {e.reason}",
+                file=sys.stderr,
+            )
+
+        except urllib.error.URLError as e:
+
+            print(
+                f"⚠️ Google News connection error "
+                f"for '{clean_topic}': "
+                f"{e.reason}",
+                file=sys.stderr,
+            )
+
+        except ET.ParseError as e:
+
+            print(
+                f"⚠️ Google News returned invalid XML "
+                f"for '{clean_topic}': {e}",
+                file=sys.stderr,
+            )
+
+        except Exception as e:
+
+            print(
+                f"⚠️ Unexpected error fetching "
+                f"'{clean_topic}': {e}",
+                file=sys.stderr,
+            )
+
+    return []
 
 # ==========================================
 # 2. SYNTHESIZER (OpenAI gpt-4o-mini)
