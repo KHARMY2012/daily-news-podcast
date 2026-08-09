@@ -28,10 +28,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 DEFAULT_TOPICS = (
     "South African Economy,International Economy,ZAR exchange rate,Commodity prices,Oil price,"
     "Gold price,Silver price,Platinum price,Palladium price,Interest rate in South Africa,"
+    "South african tax"
     "Interest rate in UK,Interest rate in USA,South African Economic Indicators,South African Companies,"
     "Sasol,MTN,Oceana Group,Metair,Hulamin,Thungela,Telkom,Prosus,Exxaro,Reunert,Raubex,WBHO,Vodacom,"
     "ArcelorMittal,TFG,Cashbuild,African Rainbow Minerals,Sea Harvest,We Buy Cars,Johannesburg Stock Exchange JSE,"
-    "South African Property Industry,Shopping Centre Developments,Technology,Arsenal Football Club"
+    "South African Property Industry,Shopping Centre Developments,Technology"
 )
 
 # Safely split topics into a list
@@ -43,7 +44,7 @@ else:
 
 MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES", "4"))
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "openai").lower()  # "gtts" (free) or "openai" (paid)
-OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "alloy")  # alloy, echo, fable, onyx, nova, shimmer
+OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "echo")  # alloy, echo, fable, onyx, nova, shimmer
 
 # ==========================================
 # 1. NEWS GATHERER (Google News RSS - Free)
@@ -117,12 +118,12 @@ def generate_podcast_script(all_news_data):
     Write a podcast script matching these exact guidelines:
     1. Tone: Professional, energetic, intellectual, and highly engaging.
     2. Structure:
-        * Warm Introduction: Give a charismatic greeting: "{greeting} briefing for {today_str}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, property, and sport."
+        * Energetic Introduction: Give a charismatic greeting: "{greeting} briefing for {today_str}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, south african tax and property."
         * Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Explain why these developments matter, connect the dots, and discuss their economic or real-world implications.
         * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing.
-        * Outro: Todays commodaties prices are Gold is trading at ..., silver at..., platinum at ..., palladium at ... and brent crude oil at ....
+        * Outro: Todays commodaties prices are Gold is trading at ..., silver at..., platinum at ..., palladium at ... and brent crude oil at .... The Rand is currently at ... to the US Dollar, ... to the GB Pound, ... to the Euro and ... to the Saudi Riyaal.
     3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues, speaker labels, or markdown formatting.
-    4. Length & Sparse News Policy: The script MUST be between 2,500 and 3,500 words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length.
+    4. Length & Sparse News Policy: The script MUST be between 2,500 and 4,500 words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length.
     """
 
     print("Generating long-form podcast script via OpenAI GPT-4o-mini...")
