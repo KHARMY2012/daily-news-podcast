@@ -28,11 +28,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 DEFAULT_TOPICS = (
     "South African Economy,International Economy,ZAR exchange rate,Commodity prices,Oil price,"
     "Gold price,Silver price,Platinum price,Palladium price,Interest rate in South Africa,"
-    "South african tax"
+    "South african tax,"
+    "Technology,Artificial Intelligence,"
     "Interest rate in UK,Interest rate in USA,South African Economic Indicators,South African Companies,"
     "Sasol,MTN,Oceana Group,Metair,Hulamin,Thungela,Telkom,Prosus,Exxaro,Reunert,Raubex,WBHO,Vodacom,"
     "ArcelorMittal,TFG,Cashbuild,African Rainbow Minerals,Sea Harvest,We Buy Cars,Johannesburg Stock Exchange JSE,"
-    "South African Property Industry,Shopping Centre Developments,Technology"
+    "South African Property Industry,Shopping Centre Developments"
 )
 
 # Safely split topics into a list
@@ -42,7 +43,7 @@ if NEWS_TOPICS_ENV:
 else:
     TOPICS = [t.strip() for t in DEFAULT_TOPICS.split(",") if t.strip()]
 
-MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES", "4"))
+MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES", "6"))
 TTS_PROVIDER = os.getenv("TTS_PROVIDER", "openai").lower()  # "gtts" (free) or "openai" (paid)
 OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "echo")  # alloy, echo, fable, onyx, nova, shimmer
 
