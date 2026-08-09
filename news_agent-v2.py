@@ -120,7 +120,7 @@ def generate_podcast_script(all_news_data):
         * Warm Introduction: Give a charismatic greeting: "{greeting} briefing for {today_str}. I'm your host, and today we have a comprehensive update covering critical developments across economics, markets, property, and sport."
         * Main Segments: Dedicate a solid, deeply detailed section to each and every topic. Explain why these developments matter, connect the dots, and discuss their economic or real-world implications.
         * Smooth Transitions: Use professional, conversational transition phrases between segments to keep the audio flowing.
-        * Outro: A thoughtful sign-off.
+        * Outro: Todays commodaties prices are Gold is trading at ..., silver at..., platinum at ..., palladium at ... and brent crude oil at ....
     3. Script Format: Output ONLY the spoken words. Do NOT include sound effect cues, speaker labels, or markdown formatting.
     4. Length & Sparse News Policy: The script MUST be between 2,500 and 3,500 words. If there is very little direct news data for a topic, do NOT shorten the script. Instead, thoroughly elaborate on the historical background of the companies, explain how their business model works, define key JSE or economic terms, and discuss the wider industry trends. Use this educational context to guarantee you hit the requested word length.
     """
