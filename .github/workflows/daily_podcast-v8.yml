@@ -1,4 +1,4 @@
-name: Daily Podcast Agent (V8 - Telegram Stable)
+name: Daily Podcast Agent (V9 - Market Data + Energetic Voice)
 
 on:
   schedule:
@@ -37,20 +37,25 @@ jobs:
       env:
         # Secure API Key stored in your GitHub Repository Secrets
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        
+
         # User-specified topics of interest (comma-separated, no spaces around commas)
         NEWS_TOPICS: "South African Economy,Global Economy,ZAR Exchange Rate,Technology,Artificial Intelligence,Interest Rate in South Africa,Property Sector,Commodity prices,Brent Crude Oil,Gold Price,Silver Price,South African Companies,Johannesburg Stock Exchange JSE,South African Property Industry,Shopping Centre Developments South Africa,Arsenal Football Club"
-        
+
         # Number of articles fetched per topic
         MAX_ARTICLES: 6
-        
-        # Set to "openai" for realistic voices (requires API key) or "gtts" (free, basic voice)
+
+        # Long-form script length controls
+        MIN_SCRIPT_WORDS: 2200
+        TARGET_SCRIPT_WORDS: 2600
+        MAX_EXPANSION_PASSES: 2
+
+        # OpenAI speech configuration
         TTS_PROVIDER: "openai"
-        
-        # Selected voice style (alloy, echo, fable, onyx, nova, shimmer)
-        OPENAI_TTS_VOICE: "onyx"
+        OPENAI_TTS_MODEL: "gpt-4o-mini-tts"
+        OPENAI_TTS_VOICE: "cedar"
+        OPENAI_TTS_INSTRUCTIONS: "Speak like an energetic, polished financial-news narrator. Sound confident, alert and engaging without becoming theatrical. Use crisp pronunciation, natural emphasis on important figures, and a slightly brisk but comfortable broadcast pace."
       run: |
-        python news_agent-v2.py
+        python news_agent-v3.py
 
     - name: Send Briefing to Telegram
       env:
@@ -60,30 +65,30 @@ jobs:
         # Locate the compiled files
         MP3_FILE=$(ls *.mp3 | head -n 1)
         TXT_FILE=$(ls *.txt | head -n 1)
-        
+
         if [ -z "$MP3_FILE" ] || [ -z "$TXT_FILE" ]; then
           echo "❌ Error: Could not find generated audio or transcript files!"
           exit 1
         fi
-        
+
         echo "📤 Sending files to Telegram chat..."
-        
-        # 1. Send the status header text (using proper -X POST HTTP method)
+
+        # 1. Send the status header text
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
           -d "chat_id=${CHAT_ID}" \
-          -d "text=🎙️ *Your Daily Podcast Briefing is Ready!* 🎙️%0A%0AHere is today's 10-15 minute audio update and written transcript. Stream it directly below:" \
+          -d "text=🎙️ *Your Daily Podcast Briefing is Ready!* 🎙️%0A%0AHere is today's 15-20 minute audio update and written transcript, including the latest available exchange rates and commodity prices. Stream it directly below:" \
           -d "parse_mode=Markdown"
-          
-        # 2. Send the written transcript as a file (using proper -X POST HTTP method)
+
+        # 2. Send the written transcript as a file
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
           -F "chat_id=${CHAT_ID}" \
           -F "document=@${TXT_FILE}"
-          
-        # 3. Send the audio file (using proper -X POST HTTP method)
+
+        # 3. Send the audio file
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendAudio" \
           -F "chat_id=${CHAT_ID}" \
           -F "audio=@${MP3_FILE}" \
           -F "title=Daily Briefing" \
           -F "performer=Daily News Agent"
-          
+
         echo "🎉 Successfully dispatched to your iPhone!"
