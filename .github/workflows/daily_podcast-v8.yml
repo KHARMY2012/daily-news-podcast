@@ -1,4 +1,4 @@
-name: Daily Podcast Agent (V10 - Expanded Multi-Source News)
+name: Daily Podcast Agent (V11 - SA Retail + Cape Town + JSE Movers)
 
 on:
   schedule:
@@ -38,13 +38,13 @@ jobs:
         # Secure API Key stored in your GitHub Repository Secrets
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-        # User-specified topics of interest (comma-separated, no spaces around commas)
-        NEWS_TOPICS: "South African Economy,Global Economy,ZAR Exchange Rate,Technology,Artificial Intelligence,Interest Rate in South Africa,Property Sector,Commodity prices,Brent Crude Oil,Gold Price,Silver Price,South African Companies,Johannesburg Stock Exchange JSE,South African Property Industry,Shopping Centre Developments South Africa,Arsenal Football Club"
+        # Active podcast topics
+        NEWS_TOPICS: "South African Economy,Global Economy,ZAR Exchange Rate,Technology,Artificial Intelligence,Interest Rate in South Africa,Property Sector,Commodity prices,Brent Crude Oil,Gold Price,Silver Price,South African Companies,Johannesburg Stock Exchange JSE,JSE Major Share Price Moves,South African Retail Sector,South African Property Industry,Shopping Centre Developments South Africa,Cape Town News"
 
         # Per-query article limit used by the underlying Google/GDELT collectors
         MAX_ARTICLES: 6
 
-        # V4 expanded-news controls
+        # Expanded-news controls
         GOOGLE_QUERY_VARIANTS: 3
         GDELT_QUERY_VARIANTS: 2
         CANDIDATE_ARTICLES_PER_TOPIC: 14
@@ -65,7 +65,7 @@ jobs:
         OPENAI_TTS_VOICE: "cedar"
         OPENAI_TTS_INSTRUCTIONS: "Speak like an energetic, polished financial-news narrator. Sound confident, alert and engaging without becoming theatrical. Use crisp pronunciation, natural emphasis on important figures, and a slightly brisk but comfortable broadcast pace."
       run: |
-        python news_agent-v4.py
+        python news_agent-v5.py
 
     - name: Send Briefing to Telegram
       env:
@@ -86,7 +86,7 @@ jobs:
         # 1. Send the status header text
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
           -d "chat_id=${CHAT_ID}" \
-          -d "text=🎙️ *Your Daily Podcast Briefing is Ready!* 🎙️%0A%0AHere is today's 15-20 minute multi-source audio update and written transcript, including the latest available exchange rates and commodity prices. Stream it directly below:" \
+          -d "text=🎙️ *Your Daily Podcast Briefing is Ready!* 🎙️%0A%0AHere is today's 15-20 minute multi-source audio update and written transcript, including South African retail, JSE market movers, Cape Town news, exchange rates and the selected commodity prices. Stream it directly below:" \
           -d "parse_mode=Markdown"
 
         # 2. Send the written transcript as a file
