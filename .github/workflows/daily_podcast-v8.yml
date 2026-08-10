@@ -9,9 +9,6 @@ on:
     - cron: '0 16 * * *'
   workflow_dispatch:
     # Allows you to manually trigger the podcast generation on GitHub at any time
-  push:
-    paths:
-      - '.podcast-trigger'
 
 jobs:
   build-and-run:
